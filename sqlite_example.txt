@@ -1,0 +1,35 @@
+=> Make a Query
+=> creating a new table for a new column
+=> in this example user_id forgotten
+
+table = 'CREATE TABLE users(username VARCHAR(50), fname VARCHAR(50), lname VARCHAR(50) , email VARCHAR(50))'
+query = 'INSERT INTO users VALUES('dabve', 'admin', 'band', 'dabve_band@email.com')'
+
+PRAGMA foreign_keys=off       # disable foreign key constraint
+BEGIN TRANSACTION
+table = 'CREATE TABLE "el_qalam_elqalam_" (
+         "bab_id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
+         "kitab_id_id" integer NOT NULL REFERENCES "el_qalam_kitab" ("kitab_id") DEFERRABLE INITIALLY DEFERRED,
+         "bab_title" varchar(255) NOT NULL UNIQUE,
+         "date_hijri" varchar(100) NOT NULL,
+         "bab" text NOT NULL)'
+
+
+table = 'CREATE TABLE users_(user_id INT, username VARCHAR(50), fname VARCHAR(50), lname VARCHAR(50) , email VARCHAR(50))'
+query = 'INSERT INTO users_(username, fname, lname, email) SELECT * FROM users'
+
+DROP TABLE IF EXISTS users;
+ALTER TABLE users_ RENAME TO users;
+COMMIT
+PRAGMA foreign_keys=on       # enable foreign key constraint
+
+---------------------------------------------------------------------
+=> CREATE TABLE AS ...
+=> NB: Column will be populated with records based on the condition
+
+'CREATE TABLE articles_ AS SELECT * FROM articles'
+'CREATE TABLE users_active AS SELECT users.user_id AS user_id_id users.fname, users.lname, users.email, users.pwd
+ FROM users WHERE users.is_active = True'
+
+=> ALTER TABLE ADD COLUMN
+ALTER TABLE lego_sets ADD COLUMN parent_id INTEGER NULL
