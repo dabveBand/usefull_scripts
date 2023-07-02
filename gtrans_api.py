@@ -10,6 +10,10 @@ import requests
 import typer
 from rich.console import Console
 from rich.table import Table
+import os
+import dotenv
+
+dotenv.load_dotenv()
 
 console = Console()
 app = typer.Typer()
@@ -28,7 +32,7 @@ def translate(source: str = typer.Option('en', help='Source language to translat
     headers = {
         "content-type": "application/x-www-form-urlencoded",
         "Accept-Encoding": "application/gzip",
-        "X-RapidAPI-Key": "5348b9d3e4msh79e734953af7414p1f8f6ajsn7854424c1bb3",
+        "X-RapidAPI-Key": os.getenv('RAPIDAPI_KEY'),
         "X-RapidAPI-Host": "google-translate1.p.rapidapi.com"
     }
 
