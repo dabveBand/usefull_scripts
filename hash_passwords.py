@@ -19,8 +19,7 @@ def hash_password(pwd, salt=None, iterations=260000):
         salt = secrets.token_hex(16)
     assert salt and isinstance(salt, str) and "$" not in salt
     assert isinstance(pwd, str)
-    pw_hash = hashlib.pbkdf2_hmac(
-        'sha256', pwd.encode('utf-8'), salt.encode('utf-8'), iterations)
+    pw_hash = hashlib.pbkdf2_hmac('sha256', pwd.encode('utf-8'), salt.encode('utf-8'), iterations)
     b64_hash = base64.b64encode(pw_hash).decode('ascii').strip()
     return '{}${}${}${}'.format(ALGORITHM, iterations, salt, b64_hash)
 

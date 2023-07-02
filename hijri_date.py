@@ -49,8 +49,12 @@ def hijri_date_terminal():
 
 
 if __name__ == '__main__':
-    # hijri_date_terminal()
+    hijri_date_terminal()
     while True:
-        print(milady2hijri())
-        print('-' * 10)
-        print()
+        try:
+            print(milady2hijri())
+            print('-' * 10)
+            print()
+        except KeyboardInterrupt:
+            print()
+            break

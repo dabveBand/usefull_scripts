@@ -15,7 +15,9 @@ from collections import namedtuple, OrderedDict
 import sqlite3
 from sqlite3 import Error
 from cli_helpers import tabular_output
-from prompt_toolkit import print_formatted_text, HTML
+from rich.console import Console
+
+console = Console()
 
 
 class MissingDbName(BaseException):
@@ -26,25 +28,40 @@ class MissingDbName(BaseException):
 class Display:
     def __init__(self, desc, rows):
         """
-        Display result as: (table | vertical | return a namedtuple object | return a dict object | return an OrderedDict
+        Display result as:
+        :desc: [desc[0] for desc in curs.description]
+        :rows: curs.fetchall()
+        (table | vertical | list of namedtuple object | list of dicts | list of an OrderedDict
         """
         self.desc = desc
         self.rows = rows
 
     @property
     def as_dict(self):
+        """
+        Return a list of OrderedDict
+        >>> db_handler.make_query(query, display=True).as_dict
+        """
         # return a list of dict objects
         rowdicts = [dict(zip(self.desc, row)) for row in self.rows]
         return rowdicts
 
     @property
     def as_orderedDict(self):
+        """
+        Return a list of OrderedDict
+        >>> db_handler.make_query(query, display=True).as_orderedDict
+        """
         # return a list of OrderedDict
         rowdicts = [OrderedDict(zip(self.desc, row)) for row in self.rows]
         return rowdicts
 
     @property
     def as_namedtuple(self):
+        """
+        Return a list of OrderedDict
+        >>> db_handler.make_query(query, display=True).as_namedtuple
+        """
         for ind, value in enumerate(self.desc):
             # namedtuple take this form: Parts = namedtuple('Parts', 'id_num desc cost amount')
             # find white space on fields_name and change it to '_' chars
@@ -55,9 +72,9 @@ class Display:
         rows = [Row(*r) for r in self.rows]              # getting values
         return rows
 
-    def terminal_display(self, display='grid', truncate_chars=False):
+    def table_display(self, display='grid', truncate_chars=False):
         """
-        Display Result in Terminal
+        Display Result in Terminal with tabulate
         default display: 'grid'
         :display: [ascii, psql, grid, simple, html, csv, fancy_grid]
         """
@@ -68,7 +85,21 @@ class Display:
 
         for row in tabular_output.format_output(data, headers, format_name=display):
             print(row)
-        print_formatted_text(HTML('<b>[<style fg="#17a2b8">counts</style>] {}</b>'.format(len(self.rows))))
+        console.print('\[[#17a2b8]counts[/]] {} Rows'.format(len(self.rows)), style='bold')
+
+    @property
+    def richtable_display(self):
+        """
+        Display result of query in terminal with rich.table
+        """
+        from rich.table import Table
+        table = Table(header_style='bold magenta')
+        for desc in self.desc: table.add_column(desc)
+        for row in self.rows:
+            row = map(str, row)
+            table.add_row(*row)
+        console.print(table)
+        console.print('\[[#17a2b8]Counts[/]]: {} Rows'.format(len(self.rows)), style='bold')
 
 
 class SqliteFunc:
@@ -76,18 +107,18 @@ class SqliteFunc:
         if pathlib.Path(db_name).is_file() and pathlib.Path(db_name).exists():
             self.db_name = db_name
         else:
-            self.error_msg('DB with name {} does not exits.'.format(db_name))
+            self.error_msg(81, 'DB with name {} does not exits.'.format(db_name))
             create = input('do you want to create it [y/N]: ')
             if create.lower() in ('y', 'yes'):
                 self.db_name = db_name
             else:
                 sys.exit()
 
-    def error_msg(self, msg):
-        print_formatted_text(HTML('<b>[<style fg="#dc3545">error</style>] <style fg="#dc3545">{}</style></b>'.format(msg)))
+    def error_msg(self, lineno, err):
+        console.print('[bold]\[[#dc3545]error[/]] line {}: {}[/]'.format(lineno, err))
 
     def success_msg(self, msg):
-        print_formatted_text(HTML('<b>[<style fg="#17a2b8">success</style>] {}</b>'.format(msg)))
+        console.print('[bold]\[[#17a2b8]success[/]] {}[/]'.format(msg))
 
     def login(self):
         """
@@ -96,7 +127,9 @@ class SqliteFunc:
         try:
             conn = sqlite3.connect(self.db_name)
         except Error as err:
-            print_formatted_text(HTML('<b><style fg="#dc3545">[Err] {}</style></b>'.format(err)))
+            exc_type, exc_object, exc_traceback = sys.exc_info()
+            exc_lineno = exc_traceback.tb_lineno
+            self.error_msg(exc_lineno, err)
         else:
             conn.execute('PRAGMA foreign_keys = 1')
             curs = conn.cursor()
@@ -114,8 +147,10 @@ class SqliteFunc:
 
     def describe_table(self, table_name):
         """
-        usage: describe_table('table_name')
-        return tuple (desc, rows)
+        Describe a table
+        :table_name: the table name
+        :return: a display instance
+        >>> db_handler.describe_table('table_name')
         """
         query = 'SELECT * FROM sqlite_master WHERE type ="table" and name = ?'
         desc, rows = self.make_query(query, [table_name])
@@ -124,7 +159,7 @@ class SqliteFunc:
     def show_idx_trigg_view(self, type_of):
         """
         usage: show_idx_trigg_view('index | triggers | view')
-        return display instance
+        :return: display instance
         """
         # select * from sqlite_master where type = 'index'      # to show indexes
         # select * from sqlite_master where type = 'view'       # to show views
@@ -135,13 +170,15 @@ class SqliteFunc:
     def make_query(self, query, params=(), display=False):
         """
         usage : make_query('select * from table_name where id = ?', [1])
-        return: tuple (desc, rows) | rowcount for update and delete operations
+        return: tuple(desc, rows) | rowcount for update and delete operations
         """
         conn, curs = self.login()
         try:
             curs.execute(query, params)
         except Error as err:
-            self.error_msg(err)
+            exc_type, exc_object, exc_traceback = sys.exc_info()
+            exc_lineno = exc_traceback.tb_lineno
+            self.error_msg(exc_lineno, err)
             sys.exit()
         else:
             stmt = query.split()[0].upper()
@@ -203,7 +240,9 @@ class SqliteFunc:
         try:
             curs.execute('SELECT id FROM ' + table + ' WHERE ' + column + ' = ?', [value])
         except Error as err:
-            self.error_msg(err)
+            exc_type, exc_object, exc_traceback = sys.exc_info()
+            exc_lineno = exc_traceback.tb_lineno
+            self.error_msg(exc_lineno, err)
         else:
             if curs.fetchone(): return True
             else: return False
@@ -231,7 +270,7 @@ class SqliteFunc:
             for row in rows:
                 csv_writer.writerow(row)
                 count += 1
-        self.success_msg('done writing <style fg="#20c997">{}</style> to <style fg="#20c997">{}</style>'.format(count, csv_out))
+        self.success_msg('done writing [#20c997]{}[/] Rows to [#20c997]{}[/].'.format(count, csv_out))
 
     def write_to_html(self, out_file, page_title, query, params=()):
         """
@@ -314,10 +353,12 @@ class SqliteFunc:
         try:
             curs.executemany(query, rows)
         except Error as err:
-            print_formatted_text(HTML('<b><style fg="#dc3545">[Error] {}</style></b>'.format(err)))
+            exc_type, exc_object, exc_traceback = sys.exc_info()
+            exc_lineno = exc_traceback.tb_lineno
+            self.error_msg(exc_lineno, err)
         else:
             conn.commit()
-            self.success_msg('{} loaded rows to <style fg="#20c997">{}</style>.'.format(curs.rowcount, table_name))
+            self.success_msg('{} loaded rows to [#20c997]{}[/].'.format(curs.rowcount, table_name))
         finally:
             if conn: conn.close()
 
@@ -373,33 +414,11 @@ def atache_database(curs, dbname, alias):
 
 
 if __name__ == '__main__':
-    db_name = 'false.db'
+    db_name = '../django_app/arab_english/english_arabic/db.sqlite3'
     db_handler = SqliteFunc(db_name)
 
-    db_handler.show_tables.terminal_display()                   # terminal_default
-    # db_handler.describe_table('State').terminal_display('vertical')
-
-    # query = 'SELECT prefix FROM CarrierCode Where state_id = ?'
-    # desc, rows = db_handler.make_query(query, [6])
-    # for row in rows:
-        # print(row[0].replace('(', '').replace(')', '').replace('-', '').replace(' '))
-    # db_handler.display(desc, rows).terminal_display(truncate_chars=False)
-    # db_handler.write_to_excel('file.xlsx', query, params=[20])
-    # named_tuple = db_handler.display(desc, rows).as_namedtuple
-    # print(named_tuple)
-
-    # print(db_handler.load_from_csv('CarrierCode', '../web_scrap/carr_codes.csv', sep=','))
-
-    # Example of creating table:
-
-    # fields = [
-        # 'id integer not null primary key autoincrement',
-        # 'state_id integer not null',
-        # 'prefix varchar',
-        # 'type varchar',
-        # 'primary city varchar',
-        # 'carrier varchar',
-        # 'introduced varchar',
-    # ]
-    # result = db_handler.create_tables('State', fields)
-    # print(result)
+    # db_handler.show_tables.table_display()                   # terminal_default
+    table_name = 'translator_arenqamos'
+    query = f'select * from {table_name}'
+    db_handler.write_to_csv('arab_english.csv', query, params=())
+    # db_handler.load_from_csv(table_name, './arab_english.csv', sep=';')

@@ -25,6 +25,3 @@ if __name__ == '__main__':
     as_dict = [row._asdict() for row in rows]
     for row in rows:
         print(row)
-    # print(fields)
-    # print(rows)
-    # print(as_dict)

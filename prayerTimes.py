@@ -28,6 +28,7 @@ methods = {
 
 
 def get_prayer_times(country, city, month, year, method):
+    # http://api.aladhan.com/v1/timingsByCity?city=Bouismail&country=DZ&method=3
     url = 'http://api.aladhan.com/v1/calendarByCity'
     params = {'country': country, 'city': city, 'month': month, 'year': year, 'method': method}
     res = requests.get(url, params=params)
@@ -60,9 +61,9 @@ if __name__ == '__main__':
     from datetime import date
     country = 'DZ'
     city = 'Bouismail'
-    method = '8'
+    method = '3'
     month = input('(?) Month Number: ')
     day = int(input('(?) Day Number: '))
     year = date.today().year
-    json_data = get_prayer_times(country, city, method, month, year)
+    json_data = get_prayer_times(country, city, month, year, method)
     print_times_byday(day, json_data)
