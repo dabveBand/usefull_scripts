@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# author        : el3arbi bdabve@gmail.com
+# author  : el3arbi bdabve@gmail.com
+# desc    : this script help copying to clipboard from env.variable
+#           in order to work pyperclip you must install xclip: sudo apt install xclip
+# -----------------------------------------------------
 
 import click
 import pyperclip
@@ -39,7 +42,6 @@ def get_value_from_dict(lst, argument):
         argument = argument.upper()
         if argument in os.environ:
             value = os.environ[argument]
-            print(value)
             pyperclip.copy(value)
             click.echo(f'{argument} Value copied to clipboard')
         else:
