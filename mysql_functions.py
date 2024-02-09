@@ -20,7 +20,9 @@ import getpass
 
 from mysql.connector import connect, Error
 from sqlite_functions import Display
-import colors_
+
+from rich.console import Console
+console = Console()
 
 
 class MysqlFunc:
@@ -28,7 +30,7 @@ class MysqlFunc:
     MySQL from python
     """
     def __init__(self, username, host='localhost', db_name=''):
-        passwd = getpass.getpass(prompt='\n{}'.format(colors_.bold_msg('[:] Password: ')))
+        passwd = getpass.getpass(prompt='\n{}'.format('[:] Password: '))
         self.db_name = db_name
 
         self.config = {
@@ -45,7 +47,7 @@ class MysqlFunc:
         try:
             conn = connect(**self.config)
         except Error as err:
-            print('{}'.format(colors_.red_bold_msg('[-] Error: ' + str(err))))
+            console.print(f'[bold]([red]-[/red])[/bold] [red]Error[/red]: {err}')
             sys.exit()
         else:
             curs = conn.cursor()
@@ -105,7 +107,7 @@ class MysqlFunc:
             curs.execute(query, params)
         except Error as err:
             print('-' * 100)
-            print('{}'.format(colors_.red_bold_msg('[-] Error: ' + str(err))))
+            console.log(f'Error: {err}')
             print('-' * 100)
             sys.exit()
         else:
@@ -219,7 +221,7 @@ class MysqlFunc:
         try:
             curs.executemany(query, rows)
         except Error as err:
-            print('{}'.format(colors_.red_bold_msg('[-] Error: ' + str(err))))
+            console.log(f'Error: {err}')
         else:
             conn.commit()
             return '[+] {}: Rows Added Successfully'.format(curs.rowcount)
@@ -238,7 +240,8 @@ class MysqlFunc:
             csv_writer.writerow(desc)       # write headers
             for row in rows:
                 csv_writer.writerow(row)
-        return '\n{}'.format(colors_.blue_bold_msg('[+] Success out file : ' + csv_out))
+        console.print(f'[bold]([blue]+[/blue])[/bold] Done writing to: {csv_out}')
+        return True
 
     def __repr__(self):
         return '<__main__: {} connected to {!r} >'.format(self.__class__.__name__, self.db_name)
@@ -248,20 +251,28 @@ if __name__ == '__main__':
     # ----------------
     # => Config Var
     # ----------------
-    user = 'Lerato3123@!$'
-    host = '172.31.68.95'
-    db_name = 'Lerato3123@!$'
+    user = 'dabve'
+    host = 'localhost'
+    db_name = 'test_ngrok'
+    # db_name = ''
     db_handler = MysqlFunc(user, host, db_name)
+    print(db_handler)
+
+    # Query to create a database
+    # query = 'create database if not exists stock_fact_idir character set "utf8"'
+    # result = db_handler.make_query(query)
+    # print(result)
+    # print('#' * 50)
+    #
     # ------------------
     # => show databases
     # ------------------
-    # db_handler.show_databases.table_display()
-    # db_handler.show_databases.vertical_display()
+    db_handler.show_databases.richtable_display
 
     # ---------------
     # => show tables
     # ---------------
-    # db_handler.show_tables.table_display()
+    # db_handler.show_tables.richtable_display
 
     # ----------------
     # => show triggers
@@ -287,12 +298,12 @@ if __name__ == '__main__':
     # query = 'SHOW GLOBAL STATUS LIKE Threads_connected'
     # query = 'SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = table_name'    # list of tables
     # Table column definition
-    query = '''SELECT COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_TYPE, CHARACTER_SET_NAME
-               COLLATION_NAME, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS
-               WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s'''       # we can add: AND COLUMN_NAME = %s
-    params = ['Shop', 'articles']
-    desc, rows = db_handler.make_query(query, params)
-    db_handler.display(desc, rows).vertical_display()
+    # query = '''SELECT COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, COLUMN_TYPE, CHARACTER_SET_NAME
+    #          # COLLATION_NAME, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS
+    #          # WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s'''       # we can add: AND COLUMN_NAME = %s
+    # params = ['Shop', 'articles']
+    # desc, rows = db_handler.make_query(query, params)
+    # db_handler.display(desc, rows).vertical_display()
 
     # as namedtuple
     # as_namedtuple = db_handler.display(desc, rows).as_namedtuple
@@ -334,11 +345,13 @@ if __name__ == '__main__':
     # -------------------------------
     # => save output to html file
     # -------------------------------
-    # query = 'SELECT * FROM magasin_pdr WHERE code LIKE %s LIMIT 10'
-    # params = ['%bhs%']
-    # page_title = 'BHS Articles'
-    # out_file = 'records.html'
-    # handler.save_to_html(out_file, page_title, query, params)
+    # query = 'select * from users'
+    # params = []
+    # # query = 'SELECT * FROM magasin_pdr WHERE code LIKE %s LIMIT 10'
+    # # params = ['%bhs%']
+    # page_title = 'mysql users from our table'
+    # out_file = 'index.html'
+    # db_handler.save_to_html(out_file, page_title, query, params)
 
     # ----------------------------
     # => as a named tuples

@@ -1,32 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-#
-# created : 09-Apr-2019
-# author  : daBve, dabve@gmail.fr
-#
-# description   : sqlite operations to help work with sqlite databases
-# requirement   : sys, csv, collections(namedtuple, OrderedDict), sqlite3, terminaltables, xlsxwriter
-# version       : from 1.0.0 to 1.1.0
-# ---------------------------------------------------------------------------------------------
-
-
-import pathlib, sys, csv
-from collections import namedtuple, OrderedDict
+from decimal import Decimal
+from datetime import date
+import sys
+import pathlib
 import sqlite3
-from sqlite3 import Error
-from cli_helpers import tabular_output
-from rich.console import Console
+from collections import namedtuple, OrderedDict
+# import utils
 
+from rich.console import Console
 console = Console()
 
 
-class MissingDbName(BaseException):
-    def __str__(self):
-        return 'You need to specify a database name'
-
-
 class Display:
-    def __init__(self, desc, rows):
+    def __init__(self, desc: list, rows: list):
         """
         Display result as:
         :desc: [desc[0] for desc in curs.description]
@@ -37,22 +24,11 @@ class Display:
         self.rows = rows
 
     @property
-    def as_dict(self):
-        """
-        Return a list of OrderedDict
-        >>> db_handler.make_query(query, display=True).as_dict
-        """
-        # return a list of dict objects
-        rowdicts = [dict(zip(self.desc, row)) for row in self.rows]
-        return rowdicts
-
-    @property
     def as_orderedDict(self):
         """
         Return a list of OrderedDict
         >>> db_handler.make_query(query, display=True).as_orderedDict
         """
-        # return a list of OrderedDict
         rowdicts = [OrderedDict(zip(self.desc, row)) for row in self.rows]
         return rowdicts
 
@@ -72,21 +48,6 @@ class Display:
         rows = [Row(*r) for r in self.rows]              # getting values
         return rows
 
-    def table_display(self, display='grid', truncate_chars=False):
-        """
-        Display Result in Terminal with tabulate
-        default display: 'grid'
-        :display: [ascii, psql, grid, simple, html, csv, fancy_grid]
-        """
-        data, headers = self.rows, self.desc
-        if truncate_chars:
-            width = input('width of chars to truncate: ')
-            data, headers = tabular_output.preprocessors.truncate_string(data, headers, max_field_width=width)   # truncate text
-
-        for row in tabular_output.format_output(data, headers, format_name=display):
-            print(row)
-        console.print('\[[#17a2b8]counts[/]] {} Rows'.format(len(self.rows)), style='bold')
-
     @property
     def richtable_display(self):
         """
@@ -104,21 +65,13 @@ class Display:
 
 class SqliteFunc:
     def __init__(self, db_name):
+        self.db_name = db_name
         if pathlib.Path(db_name).is_file() and pathlib.Path(db_name).exists():
-            self.db_name = db_name
+            pass
         else:
-            self.error_msg(81, 'DB with name {} does not exits.'.format(db_name))
-            create = input('do you want to create it [y/N]: ')
-            if create.lower() in ('y', 'yes'):
-                self.db_name = db_name
-            else:
-                sys.exit()
-
-    def error_msg(self, lineno, err):
-        console.print('[bold]\[[#dc3545]error[/]] line {}: {}[/]'.format(lineno, err))
-
-    def success_msg(self, msg):
-        console.print('[bold]\[[#17a2b8]success[/]] {}[/]'.format(msg))
+            utils.logger.error(f'DB with name {db_name} does not exist.')
+            utils.logger.info('Creating database and tables.')
+            self.create_tables()
 
     def login(self):
         """
@@ -126,60 +79,35 @@ class SqliteFunc:
         """
         try:
             conn = sqlite3.connect(self.db_name)
-        except Error as err:
+        except sqlite3.Error as err:
             exc_type, exc_object, exc_traceback = sys.exc_info()
             exc_lineno = exc_traceback.tb_lineno
-            self.error_msg(exc_lineno, err)
+            utils.logger.error(f'{exc_lineno} :: {err}')
         else:
             conn.execute('PRAGMA foreign_keys = 1')
             curs = conn.cursor()
             return conn, curs
 
-    @property
-    def show_tables(self):
+    def make_query(self, query: str, params=(), display: bool = False):
         """
-        Show All Tables in database
-        return a display instance
-        """
-        query = 'SELECT name FROM sqlite_master WHERE type = "table"'
-        desc, rows = self.make_query(query)
-        return self.display(desc, rows)
+        CRUD Function
+        if select return tuple(desc, rows)
+        else update or delete; return rowcount of affected rows
 
-    def describe_table(self, table_name):
-        """
-        Describe a table
-        :table_name: the table name
-        :return: a display instance
-        >>> db_handler.describe_table('table_name')
-        """
-        query = 'SELECT * FROM sqlite_master WHERE type ="table" and name = ?'
-        desc, rows = self.make_query(query, [table_name])
-        return self.display(desc, rows)
+        :query: like select * from table name
+        :params: query params
+        :display: return display instance
 
-    def show_idx_trigg_view(self, type_of):
-        """
-        usage: show_idx_trigg_view('index | triggers | view')
-        :return: display instance
-        """
-        # select * from sqlite_master where type = 'index'      # to show indexes
-        # select * from sqlite_master where type = 'view'       # to show views
-        query = 'SELECT * FROM sqlite_master WHERE type = ?'
-        desc, rows = self.make_query(query, [type_of])
-        return self.display(desc, rows)
-
-    def make_query(self, query, params=(), display=False):
-        """
-        usage : make_query('select * from table_name where id = ?', [1])
-        return: tuple(desc, rows) | rowcount for update and delete operations
+        >>> make_query('select * from table_name where id = ?', [1])
         """
         conn, curs = self.login()
         try:
             curs.execute(query, params)
-        except Error as err:
+        except sqlite3.Error as err:
             exc_type, exc_object, exc_traceback = sys.exc_info()
             exc_lineno = exc_traceback.tb_lineno
-            self.error_msg(exc_lineno, err)
-            sys.exit()
+            utils.logger.error(f'{exc_lineno} :: {err}')
+            return err
         else:
             stmt = query.split()[0].upper()
             if stmt == 'SELECT':
@@ -191,11 +119,75 @@ class SqliteFunc:
                     return (desc, rows)
             else:
                 conn.commit()
-                return '[{}]: {} affected rows.'.format(stmt, curs.rowcount)
+                return curs.rowcount
         finally:
             if conn: conn.close()
 
-    def create_tables(self, table_name, fields):
+    # =====: Global Methods :===== #
+    def create_tables(self):
+        """This function will create all table"""
+        # base_clients table
+        tables = {
+            'base_clients': [
+                'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT',
+                'added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'name VARCHAR(255) NOT NULL UNIQUE',
+                'address VARCHAR(255) NOT NULL',
+                'phone VARCHAR(255) NOT NULL UNIQUE',
+                'nif VARCHAR(255) NOT NULL UNIQUE',
+                'nis VARCHAR(255) NOT NULL UNIQUE',
+                'ai VARCHAR(255) NOT NULL UNIQUE',
+                'n_registre VARCHAR(255) NOT NULL UNIQUE',
+            ],
+            # ===========================================================
+            'base_products': [
+                'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT',
+                'name VARCHAR(255)',
+                'ref VARCHAR(255) NOT NULL UNIQUE',
+                'qte INTEGER UNSIGNED NOT NULL',
+                'prix_achat VARCHAR(255) NOT NULL',
+                'prix_detail VARCHAR(255) NOT NULL',
+                'prix_gros VARCHAR(255)',
+                'prix_supergros VARCHAR(255)',
+            ],
+            # ===========================================================
+            'base_facture': [
+                'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT',
+                'fact_date DATE',
+                'fact_number VARCHAR(255) NOT NULL',
+                'client_id INTEGER NOT NULL',
+                'total VARCHAR(255)',
+                'tva VARCHAR(255)',
+                'total_ttc VARCHAR(255)',
+                'payment VARCHAR(255)',
+                'remains VARCHAR(255)',
+                'paid_date DATE',
+                'fact_type VARCHAR(50)',
+                'CONSTRAINT fk_client_id FOREIGN KEY (client_id) REFERENCES base_clients(id) ON DELETE CASCADE'
+            ],
+            'base_facturedetails': [
+                'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT',
+                'fact_id INTEGER NOT NULL',
+                'fact_number VARCHAR(255) NOT NULL',
+                'product_id INTEGER NOT NULL',
+                'qte INTEGER UNSIGNED',
+                'price VARCHAR(255)',
+                'total VARCHAR(255)',
+                'CONSTRAINT fk_fact_id FOREIGN KEY(fact_id) REFERENCES base_facture(id) ON DELETE CASCADE',
+            ],
+            'base_versement': [
+                'id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT',
+                'vers_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'client_id INTEGER NOT NULL',
+                'payment VARCHAR(255)',
+                'CONSTRAINT fk_client_vers_id FOREIGN KEY(client_id) REFERENCES base_clients(id) ON DELETE CASCADE'
+            ]
+        }
+        for table_name, fields in tables.items():
+            result = self.create_table(table_name, fields)
+            print(f'Result for creating table {table_name} :: {result}')
+
+    def create_table(self, table_name: str, fields: list):
         """
         usage : create_tables('table_name', ['id INTEGER', 'add_date DATETIME'])
         return: result from sqlite3
@@ -211,214 +203,351 @@ class SqliteFunc:
         query = 'CREATE INDEX {} ON {}({})'.format(index_name, table_name, field)
         return self.make_query(query)
 
-    def create_trigger(self, trigger_name, operation, table_name, stmt):
+    def get_id(self, column, table_name, value):
         """
-        usage: create_trigger('update_value', 'AFTER UPDATE', 'table_name', 'update table_name set value = qte * value')
-        NB   : you must now how to create a trigger in SQL
+        return the id
+        SELECT id FROM {table_name} WHERE {id | name | desig} = {value}
+        :column    : column to get data with id, number, client_id
+        :table_name: table name
+        :value     : value to search by
         """
-        query = '''CREATE TRIGGER {} {} ON {}
-                   BEGIN
-                       {};
-                   END'''.format(trigger_name, operation, table_name, stmt)
-        return self.make_query(query)
+        query = 'SELECT id FROM {} WHERE {} = ?'.format(table_name, column)
+        desc, result = self.make_query(query, [value])
+        return result[0][0]
 
-    def dump_records(self, table_name):
-        """
-        usage: dump_records(table_name)
-        Return a display instance
-        """
-        query = 'SELECT * FROM ' + table_name
-        desc, rows = self.make_query(query)
-        return self.display(desc, rows)
+    def dump_records(self, fields: list, table_name: str):
+        # records = Products.objects.values_list(*fields)
+        # conver the records to a list of tuples
+        # rows = list(records)
+        query = f'SELECT {", ".join(fields)} FROM {table_name}'
+        _, rows = self.make_query(query)
+        return rows
 
-    def product_exists(self, table, column, value):
-        """
-        usage : product_exists('magasin', 'reference', 'product_reference')
-        return True or False
-        """
-        conn, curs = self.login()
-        try:
-            curs.execute('SELECT id FROM ' + table + ' WHERE ' + column + ' = ?', [value])
-        except Error as err:
-            exc_type, exc_object, exc_traceback = sys.exc_info()
-            exc_lineno = exc_traceback.tb_lineno
-            self.error_msg(exc_lineno, err)
-        else:
-            if curs.fetchone(): return True
-            else: return False
-        finally:
-            if conn: conn.close()
+    def stringify(self, number: Decimal) -> str:
+        return str(number)
 
     def display(self, desc, rows):
+        """This will return a display instance"""
         display_inst = Display(desc, rows)
         return display_inst
 
-    def write_to_csv(self, csv_out, query, params=()):
+    def count_table(self, table_name: str) -> int:
+        query = f'SELECT COUNT(id) FROM {table_name}'
+        _, result = self.make_query(query)
+        return result[0][0]
+
+    def delete_item(self, table_name: str, item_id):
+        """Delete item FROM table_name where id = item_id"""
+        query = 'DELETE FROM {} WHERE id = ?'.format(table_name)
+        result = self.make_query(query, [item_id])
+        return result
+
+    # =====: Clients Methods :===== #
+    def new_client(self, name, address, phone, nif, nis, ai, n_register):
+        query = 'INSERT INTO base_clients(name, address, phone, nif, nis, ai, n_registre) VALUES(?, ?, ?, ?, ?, ?, ?)'
+        params = [name, address, phone, nif, nis, ai, n_register]
+        result = self.make_query(query, params)
+        return result
+
+    def search(self, fields, table_name, by, value):
         """
-        Write a query to a csv file
-            usage   : write_to_csv('outfile.csv', 'SELECT * FROM table WHERE id = ?', [10])
-            csv_out : Out file to write into
-            query   : SQL Query
-            params  : parameters for the query
+        Search in database
+        :fields: fields to retrieve from database
+        :table_name: the table name
+        :by: column to search by (id, name, ...)
+        :value: value to search for
+        """
+        value = f'%{value}%'
+        query = f'SELECT {", ".join(fields)} FROM {table_name } WHERE {by} LIKE ?'
+        params = [value]
+        _, rows = self.make_query(query, params)
+        return rows
+
+    def get_clients_name(self, client_id=None) -> list:
+        """
+        Get all client names from Clients Table
+        :client_id: return the client name for the given client_id
+        """
+        if client_id:
+            query = 'SELECT name FROM base_clients WHERE id = ?'
+            params = [client_id]
+            _, rows = self.make_query(query, params)
+            return rows[0][0]
+        else:
+            query = 'SELECT name FROM base_clients'
+            _, rows = self.make_query(query)
+            client_names = [row[0] for row in rows]
+            return client_names
+
+    def get_client_address(self, client_name: str):
+        """Return client address"""
+        query = 'SELECT address FROM base_clients WHERE name = ?'
+        _, address = self.make_query(query, [client_name])
+        return address[0][0]
+
+    def get_client_details(self, client_id: str):
+        """Get all Client Details"""
+        query = 'SELECT * FROM base_clients WHERE id = ?'
+        client = self.make_query(query, [client_id], display=True).as_namedtuple
+        return client[0]
+
+    def get_client_credits(self, client_id: str):
+        """Get all Client Credits"""
+        query = 'SELECT SUM(remains) FROM base_facture WHERE client_id = ?'
+        _, result = self.make_query(query, [client_id])
+        return result[0][0]
+
+    def update_client(self, params: list):
+        query = 'UPDATE base_clients SET name = ?, address = ?, phone = ?, nif = ?, nis = ?, ai = ?, n_registre = ? WHERE id = ?'
+        result = self.make_query(query, params)
+        return result
+
+    # =====: Products Methods :===== #
+    def new_product(self, name, ref, qte, prix_achat, prix_detail, prix_gros, prix_supergros):
+        query = '''INSERT INTO base_products(name, ref, qte, prix_achat, prix_detail, prix_gros, prix_supergros)
+                   VALUES(?, ?, ?, ?, ?, ?, ?)'''
+        params = [name, ref, qte, prix_achat, prix_detail, prix_gros, prix_supergros]
+        result = self.make_query(query, params)
+        return result
+
+    def product_details(self, prod_id):
+        """Get all fields FROM base_products table for a given product_id"""
+        query = 'SELECT * FROM base_products WHERE id = ?'
+        params = [prod_id]
+        result = self.make_query(query, params, display=True).as_namedtuple
+        return result[0]
+
+    def update_product(self, params: list):
+        query = '''UPDATE base_products SET name = ?, ref = ?, qte = ?, prix_achat = ?, prix_detail = ?,
+                   prix_gros = ?, prix_supergros = ? WHERE id = ?'''
+        result = self.make_query(query, params)
+        return result
+
+    # =====: Factures Methods :===== #
+    def dump_factures(self, fact_type):
+        """Dump all factures by type"""
+        query = '''SELECT f.id, f.fact_date, f.fact_number, f.fact_type, c.name, f.total, f.tva, f.total_ttc,
+                   f.payment, f.remains, f.paid_date
+                   FROM base_facture AS f LEFT JOIN base_clients as c ON f.client_id == c.id
+                   WHERE fact_type = ?'''
+        _, rows = self.make_query(query, [fact_type])
+        return rows
+
+    def search_factures(self, by, value):
+        """
+        Search for facutres
+        TODO: add fact_type to the search if needed
+        """
+        value = f'%{value}%'
+        query = f'''SELECT f.id, f.fact_date, f.fact_number, f.fact_type, c.name, f.total, f.tva, f.total_ttc,
+                   f.payment, f.remains, f.paid_date
+                   FROM base_facture AS f LEFT JOIN base_clients as c ON f.client_id == c.id
+                   WHERE {by} LIKE ?'''
+        _, rows = self.make_query(query, [value])
+        return rows
+
+    def facture_by_client(self, client_id):
+        """Return all the facture for the given client_id"""
+        query = '''SELECT f.id, f.fact_date, f.fact_number, f.fact_type, c.name, f.total, f.tva, f.total_ttc,
+                   f.payment, f.remains, f.paid_date
+                   FROM base_facture AS f LEFT JOIN base_clients as c ON f.client_id == c.id
+                   WHERE f.client_id = ?'''
+        _, rows = self.make_query(query, [client_id])
+        return rows
+
+    def get_fact_number(self, fact_type):
+        """
+        return the last fact number to add to the next facture
+        :fact_type: each type has his own number
+        """
+        query = 'SELECT MAX(fact_number) FROM base_facture WHERE fact_type = ?'
+        _, result = self.make_query(query, [fact_type])
+        fact_number = result[0][0]
+        if not fact_number:
+            return 0
+        return fact_number
+
+    def save_proforma(self, fact_date, fact_num, client_name, cart, tva: int, total_ttc: Decimal):
+        """
+        Save New Facture Proforma
+        This function will save the facture without updating stocks
         """
         conn, curs = self.login()
-        desc, rows = self.make_query(query, params)
-        with open(csv_out, 'w', encoding='utf-8') as f:
-            csv_writer = csv.writer(f, delimiter=';')
-            csv_writer.writerow(desc)
-            count = 0
-            for row in rows:
-                csv_writer.writerow(row)
-                count += 1
-        self.success_msg('done writing [#20c997]{}[/] Rows to [#20c997]{}[/].'.format(count, csv_out))
-
-    def write_to_html(self, out_file, page_title, query, params=()):
-        """
-        Desc : write a query to an html file with bootstrap templetes.
-        Usage: write_to_html(out_file, page_title, query, params)
-            out_file    : output file name; out dir sqlite_bootstrap
-            page_title  : title of the web page
-            query       : you query
-            params      : params for the query
-        """
-        headers = """
-        <!doctype html>
-        <html lang="en">
-        <head>
-        <!-- Required meta tags -->
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-        <!-- Bootstrap CSS -->
-        <link rel="stylesheet" href="bootstrap.min.css">
-        <title>{0}</title>
-        </head>
-
-        <body>
-        <div class="containter">
-        <div class="col">
-        <h1 class="text-center mb-5 mt-5">{0}</h1>
-        """.format(page_title)
-        footer = """
-            </div>
-            </div>
-            <!-- Optional JavaScript -->
-            <!-- jQuery first, then Popper.js, then Bootstrap JS -->
-            <script src="jquery-3.3.1.min.js"></script>
-            <script src="popper.min.js"></script>
-            <script src="bootstrap.min.js"></script>
-            </body>
-            </html>
-        """
-        out_file = './sqlite_bootstrap/' + out_file
-        desc, rows = self.make_query(query, params)
-        with open(out_file, 'w', encoding="utf8") as f:
-            f.write(headers)
-            f.write('''<p class="alert alert-success">QUERY: {} ---> "%s" = {}.
-                       <br>RECORDS == {}.</p>'''.format(query, params, len(rows)))
-
-            f.write('<table class="table table-bordered"><thead class="thead-dark"><tr>')
-            for des in desc:
-                # write table head description
-                f.write('<th class="scope">{}</th>'.format(des.title()))        # lowercase first chars with .title()
-            f.write('''</tr></thead>''')        # end of table headers
-            # Table Body
-            f.write('<tbody>')
-            for row in rows:
-                f.write('<tr>')
-                for r in row:
-                    f.write('<td>{}</td>'.format(r))
-                f.write('</tr>')
-
-            f.write('</tbody></table>')
-            f.write(footer)
-            self.success_msg('done writing to <style fg="#20c997">{}</style>'.format(out_file))
-
-    def load_from_csv(self, table_name, csv_file, sep=';'):
-        '''
-        Load data from csv file to table_name
-        :NOTE       : Add headers to your file.
-        :table_name : Table Name
-        :csv_file   : Input CSV File
-        :sep        : Fields Separator(delimiter) Default ';'
-        '''
-        conn, curs = self.login()
-        # with open(csv_file, encoding='latin-1') as input_file:
-        with open(csv_file, encoding='utf-8') as input_file:
-            csv_reader = csv.reader(input_file, delimiter=sep)
-            headers = ', '.join(next(csv_reader))               # string that containt headers to add to the query
-            rows = [tuple(row) for row in csv_reader]
-            bind = ('?, ' * len(rows[0]))[:-2]                  # bind will contain '?, ?' * headers number
-
-        query = 'INSERT INTO ' + table_name + '(' + headers + ') VALUES(' + bind + ')'
+        client_id = self.get_id('name', 'base_clients', client_name)
+        total_price = cart.get_total_price()
+        inv_query = '''INSERT INTO base_facture(fact_number, fact_date, client_id, total, tva, total_ttc, payment, remains, fact_type)
+                       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+        params = [fact_num, fact_date, client_id, self.stringify(total_price), self.stringify(tva),
+                  self.stringify(total_ttc), 0, 0, 'facture proforma']
         try:
-            curs.executemany(query, rows)
-        except Error as err:
+            curs.execute(inv_query, params)
+            fact_id = curs.lastrowid
+            products = [prod for prod in cart]
+            for product in products:
+                prod_id, _, qte, price, total = product
+                # insert invoice details
+                query = 'INSERT INTO base_facturedetails(fact_id, fact_number, product_id, qte, price, total) VALUES(?, ?, ?, ?, ?, ?)'
+                curs.execute(query, [fact_id, fact_num, prod_id, qte, self.stringify(price), self.stringify(total)])
+        except sqlite3.Error as err:
             exc_type, exc_object, exc_traceback = sys.exc_info()
             exc_lineno = exc_traceback.tb_lineno
-            self.error_msg(exc_lineno, err)
+            utils.logger.error(f'Insert new Proforma: {exc_lineno} :: {err}')
+            return False
         else:
             conn.commit()
-            self.success_msg('{} loaded rows to [#20c997]{}[/].'.format(curs.rowcount, table_name))
+            return True
         finally:
             if conn: conn.close()
 
-    def write_to_excel(self, excel_fname, query, params=()):
-        import xlsxwriter
-        from datetime import datetime
-        today = datetime.today()
-        with xlsxwriter.Workbook(excel_fname) as wbook:
-            wsheet = wbook.add_worksheet()
+    def save_invoice(self, fact_date, fact_num, client_name, cart, tva: Decimal, total_ttc: Decimal, versement: Decimal,
+                     fact_type: str):
+        """Save New Facture OR Bon de livraison"""
+        conn, curs = self.login()
 
-            desc_format = wbook.add_format({'font_name': 'Times New Roman',
-                                            'bold': True,
-                                            'font_size': 16,
-                                            'border': 1,
-                                            'align': 'center',
-                                            'valign': 'center'})
-            rows_format = wbook.add_format({'font_name': 'Times New Roman', 'font_size': 14, 'border': 1})
-            date_format = wbook.add_format({'num_format': 'dd mmmm yyyy'})
-            wsheet.write(0, 5, 'Date: ' + today.strftime('%d %m %Y'), date_format)
+        client_id = self.get_id('name', 'base_clients', client_name)
+        total_price = cart.get_total_price()
+        remains = total_ttc - versement
+        if remains <= 0:   # means facture paid
+            paid_date = fact_date
+        else:
+            paid_date = ''
 
-            desc, rows = self.make_query(query, params)
-            excel_row = 1
-            excel_col = 0
-            for des in desc:
-                # write description
-                wsheet.write(excel_row, excel_col, des, desc_format)
-                excel_col += 1
+        inv_query = '''INSERT INTO base_facture(
+                       fact_number, fact_date, client_id, total, tva, total_ttc, payment, remains, paid_date, fact_type)
+                       VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'''
+        params = [fact_num, fact_date, client_id, self.stringify(total_price), self.stringify(tva),
+                  self.stringify(total_ttc), self.stringify(versement), self.stringify(remains), paid_date, fact_type]
+        try:
+            curs.execute(inv_query, params)
+            fact_id = curs.lastrowid
 
-            excel_row = 1
+            # insert in versement to keep track of first fact versement
+            query = 'INSERT INTO base_versement(vers_date, payment, client_id) VALUES(?, ?, ?)'
+            curs.execute(query, [fact_date, self.stringify(versement), client_id])
+
+            products = [prod for prod in cart]
+            # INSERT into FacturesDetails
+            for product in products:
+                prod_id, _, qte, price, total = product
+                # UPDATE The Main QTE
+                curs.execute('SELECT qte FROM base_products WHERE id = ?', [prod_id])
+                db_qte = curs.fetchone()[0]
+                new_qte = db_qte - qte                  # update qte
+                params = [new_qte, prod_id]
+                curs.execute('UPDATE base_products SET qte = ? WHERE id = ?', params)
+
+                # insert invoice details
+                query = 'INSERT INTO base_facturedetails(fact_id, fact_number, product_id, qte, price, total) VALUES(?, ?, ?, ?, ?, ?)'
+                curs.execute(query, [fact_id, fact_num, prod_id, qte, self.stringify(price), self.stringify(total)])
+
+        except sqlite3.Error as err:
+            exc_type, exc_object, exc_traceback = sys.exc_info()
+            exc_lineno = exc_traceback.tb_lineno
+            utils.logger.error(f'Insert new facture: {exc_lineno} :: {err}')
+            return False
+        else:
+            conn.commit()
+            return True
+        finally:
+            if conn: conn.close()
+
+    def get_facture(self, fact_id: str):
+        """Get facture details for the given fact_id"""
+        query = 'SELECT * FROM base_facture WHERE id = ?'
+        result = self.make_query(query, [fact_id], display=True).as_namedtuple
+        return result[0]
+
+    def get_fact_details(self, fact_id: str) -> list:
+        """Get facture details from FactureDetails table"""
+        query = '''SELECT p.name, fd.qte, fd.price, fd.total FROM base_facturedetails AS fd
+                   LEFT JOIN base_products AS p ON p.id == fd.product_id
+                   WHERE fd.fact_id = ?'''
+        _, rows = self.make_query(query, [fact_id])
+        return rows
+
+    def get_versement(self, client_id: str):
+        """Select versement details from versement table for the give client_id"""
+        query = 'SELECT vers_date, payment FROM base_versement WHERE client_id = ?'
+        _, rows = self.make_query(query, [client_id])
+        return rows
+
+    def save_versement(self, client_id: str, payment: str):
+        """Save a new versement"""
+        payment = Decimal(payment)
+        today = date.today().strftime('%d/%m/%Y')
+        conn, curs = self.login()
+        query = 'INSERT INTO base_versement(vers_date, client_id, payment) VALUES(?, ?, ?)'
+        try:
+            # TODO: return the count of rowcount if multiple facture has been updated
+            # count = 0
+            result = curs.execute(query, [today, client_id, self.stringify(payment)])
+            utils.logger.debug('INSERT New_vers cli_id({})::payment({})::result({})'.format(client_id, payment, curs.rowcount))
+
+            # select facture with remains for client_id
+            query = 'SELECT id, total, remains FROM base_facture WHERE client_id = ? AND remains > 0'
+            _, rows = self.make_query(query, [client_id])      # retrieve all non payed invoices
             for row in rows:
-                excel_col = 0
-                for r in row:
-                    wsheet.write(excel_row, excel_col, r, rows_format)
-                    excel_col += 1
-                excel_row += 1
-        self.success_msg('done writing to <style fg="#20c997">{}</style>'.format(excel_fname))
-        return '(+) Done Writing to: {}'.format(excel_fname)
-
-    def __repr__(self):
-        return '<{!r} connected to {!r} >'.format(self.__class__.__name__, self.db_name)
-
-# ------------------ End of Class
-
-
-def atache_database(curs, dbname, alias):
-    """
-    # When you have multiple databases available and you want to use any one of them at a time.
-    # SQLite ATTACH DATABASE statement is used to select a particular database,
-      and after this command, all SQLite statements will be executed under the attached database.
-    """
-    query = 'ATTACH DATABASE ' + dbname + ' AS ' + alias
-    curs.execute(query)
+                fact_id, total_db, remains = row
+                remains = Decimal(remains)
+                if payment == remains:
+                    # means pay one facture
+                    new_total = remains - payment
+                    query = 'UPDATE base_facture SET payment = payment + ?, remains = ?, paid_date = ? WHERE id = ?'
+                    result = curs.execute(query, [self.stringify(payment), self.stringify(new_total), today, fact_id])
+                    msg = 'UPDATING fact id:{}; pay:{}; total:{}; result:{}'.format(fact_id, payment, new_total, result.rowcount)
+                    utils.logger.debug(msg)
+                    utils.logger.debug('Done consuming payment. return')
+                    break
+                elif payment < remains:
+                    # means facture stay with remains
+                    new_remain = remains - payment
+                    query = 'UPDATE base_facture SET payment = payment + ?, remains = ? WHERE id = ?'
+                    result = curs.execute(query, [self.stringify(payment), self.stringify(new_remain), fact_id])
+                    msg = 'UPDATING fact id:{}; pay:{}; total:{}; result:{}'.format(fact_id, payment, new_remain, result.rowcount)
+                    utils.logger.debug(msg)
+                    break
+                elif payment > remains:
+                    # payment greater than facture; and this will run again
+                    payment = payment - remains
+                    query = 'UPDATE base_facture SET payment = ?, remains = 0, paid_date = ? WHERE id = ?'
+                    result = curs.execute(query, [total_db, today, fact_id])
+                    utils.logger.debug('Pay > Remains')
+                    msg = 'Result:{}, fact id:{}; total_db:{}; pay:{}; remains:0.'.format(fact_id, payment, payment, result.rowcount)
+                    utils.logger.debug(msg)
+        except sqlite3.Error as err:
+            utils.logger.error(err)
+        else:
+            conn.commit()
+            return True
+        finally:
+            if conn: conn.close()
 
 
 if __name__ == '__main__':
-    db_name = '../django_app/arab_english/english_arabic/db.sqlite3'
+    db_name = '/home/dabve/python/desktop_app/idir_app/server/pyqtapp/db.sqlite'
     db_handler = SqliteFunc(db_name)
 
-    # db_handler.show_tables.table_display()                   # terminal_default
-    table_name = 'translator_arenqamos'
-    query = f'select * from {table_name}'
-    db_handler.write_to_csv('arab_english.csv', query, params=())
-    # db_handler.load_from_csv(table_name, './arab_english.csv', sep=';')
+    django_db_name = '/home/dabve/python/desktop_app/idir_app/server/db.sqlite3'
+    django_dbhandler = SqliteFunc(django_db_name)
+
+    query = 'SHOW CREATE TABLE Animal;'
+    desc, rows = db_handler.make_query(query)
+    for row in rows:
+        print(row)
+        query = 'INSERT INTO base_clients values(?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        result = django_dbhandler.make_query(query, row)
+        # print(result)
+        # print(row)
+    # =============================================================
+    # for table in ['base_products', 'base_clients', 'base_facture', 'base_facturedetails', 'base_versement']:
+        # result = db_handler.make_query(f'DROP TABLE {table}')
+        # print(f'-- DROP {table} :: {result}')
+    # db_handler.create_tables()
+    # =============================================================
+    # result = db_handler.get_client_credits(1)
+    # print(result)
+    # result = db_handler.new_client('Amine philip', 'Douar boula', '0554000000', '123456', '123456', '123456')
+    # print(result)
+    # desc, rows = db_handler.dump_records(['name', 'address', 'phone', 'nif', 'nis', 'n_registre'], 'base_clients')
+    # for row in rows:
+        # print(row)

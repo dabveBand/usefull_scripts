@@ -5,17 +5,17 @@
 
 import click
 import pyperclip
-from dotenv import load_dotenv
+import dotenv
 import os
 
 # Load environment variables from .env file
-load_dotenv()
+dotenv.load_dotenv(dotenv.find_dotenv())
 
 
 @click.command()
 def list_values():
     """Command to list values from a given list"""
-    keys = ['FIGMA_API', 'GITHUB', 'OPENAI_API', 'YOUTUBE_CHANNEL', 'GITHUB_LINK', ]
+    keys = ['FIGMA_API', 'GITHUB', 'OPENAI_API', 'YOUTUBE_CHANNEL', 'GITHUB_LINK', 'NGROK']
     click.echo('Values:')
     for value in keys:
         click.echo(f'- {value}')
@@ -30,7 +30,7 @@ def get_value_from_dict(lst, argument):
     """
     # Check if the argument exists as an environment variable
     if lst:
-        keys = ['FIGMA_API', 'GITHUB', 'OPENAI_API', 'YOUTUBE_CHANNEL', 'GITHUB_LINK', ]
+        keys = ['FIGMA_API', 'GITHUB', 'OPENAI_API', 'YOUTUBE_CHANNEL', 'GITHUB_LINK', 'NGROK']
         click.echo('Values:')
         for value in keys:
             click.echo(f'- {value}')
@@ -39,6 +39,7 @@ def get_value_from_dict(lst, argument):
         argument = argument.upper()
         if argument in os.environ:
             value = os.environ[argument]
+            print(value)
             pyperclip.copy(value)
             click.echo(f'{argument} Value copied to clipboard')
         else:

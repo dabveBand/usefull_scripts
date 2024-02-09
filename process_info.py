@@ -25,6 +25,11 @@ color = colors.Colors()
 
 
 def time_human(timestamp):
+    """
+    This will return a human time from timestamp
+    args: timestamp
+    return: date in hh:mm:ss
+    """
     return datetime.fromtimestamp(timestamp).strftime('%H:%M:%S')
 
 
@@ -102,8 +107,10 @@ def process_info(process_id):
         exit()
     except psutil.NoSuchProcess:
         print(color.error_msg('Error: No such Process with pid: {}'.format(process_id)))
+        exit()
     except psutil.AccessDenied:
         print(color.error_msg('You must be root'))
+        exit()
 
     info_desc = ['cwd', 'name', 'exe', 'pid', 'status', 'username', 'terminal', 'memory_info', 'create_time']
     # get a list of valid attrs names
