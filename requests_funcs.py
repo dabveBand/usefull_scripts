@@ -54,8 +54,6 @@ def get_session(hider='tor'):
 
     # chrom = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36'
     # headers = {'Accept': 'application/json'}                                              # Accept json if site provide json
-    # auth = HTTPBasicAuth('apikey', 'cqHfIqcYJGFYJzCGWoTgLI5CN5ocR11GD3uCGe1TLmm4I3Ea')    # Add apikey to HTTPBasicAuth
-
     ff = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:99.0) Gecko/20100101 Firefox/99.0'
     headers = {'User-Agent': ff}         # custom header for request; firefox headers
     session.headers = headers
