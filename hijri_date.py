@@ -12,49 +12,44 @@ from ummalqura.hijri_date import HijriDate
 from datetime import date
 import datetime
 from colors import Colors
+from rich.console import Console
 
+console = Console()
 color = Colors()
 
 
-def milady2hijri():
-    milady = input('milady date(21-12-2022) : ')
-    to_hijri = datetime.datetime.strptime(milady, '%d-%m-%Y')                # 2015-10-21 00:00:00
-    hijri = HijriDate(to_hijri.year, to_hijri.month, to_hijri.day, gr=True)
-    return '{} {} {} {}'.format(color.bold_msg(hijri.day_name),
-                                color.boldgreen_msg(hijri.day),
-                                color.bold_msg(hijri.month_name),
-                                color.boldgreen_msg(hijri.year)
-                                )
-
-
-def get_hijri_date():
-    tday = date.today()
-    # date =
-    hijri = HijriDate(tday.year, tday.month, tday.day, gr=True)
-    return '{} {} {} {}'.format(color.bold_msg(hijri.day_name),
-                                color.boldgreen_msg(hijri.day),
-                                color.bold_msg(hijri.month_name),
-                                color.boldgreen_msg(hijri.year)
-                                )
-
-
-def hijri_date_terminal():
+def milady2hijri(milady):
     """
-    # print hijri date in terminal with colors
+    this function take an input format and transform to datetime.strptime and than to hijri ummalqura
+    :milady: input time as dd-mm-yyyy
+    :return: ummalqure.HijriDate date
     """
-    tday = get_hijri_date()
-    print()
-    print(tday)
-    print()
+    try:
+        to_hijri = datetime.datetime.strptime(milady, '%d-%m-%Y')                # 2015-10-21 00:00:00
+    except ValueError:
+        return 'ValueError'
+    else:
+        hijri = HijriDate(to_hijri.year, to_hijri.month, to_hijri.day, gr=True)
+        return hijri
 
 
 if __name__ == '__main__':
-    hijri_date_terminal()
+    #
+    # Today's date
+    tday = date.today()
+    hijri = HijriDate(tday.year, tday.month, tday.day, gr=True)
+    console.print(f'\n{tday}\n')
+    console.print(f'\n{hijri.day_name} [green]{hijri.day}[/green] {hijri.month_name} {hijri.year}\n', style='bold')
+
+    #  enter in Converting loop
     while True:
         try:
-            print(milady2hijri())
-            print('-' * 10)
-            print()
+            milady = input('milady example: 21-12-2022: ')
+            hijri = milady2hijri(milady)
+            if hijri == 'ValueError':
+                console.print('\nYou must enter format like this: 01-01-2000\n', style='bold red')
+                continue
+            console.print(f'\n{hijri.day_name} {hijri.day} {hijri.month_name} {hijri.year}\n', style='bold')
         except KeyboardInterrupt:
             print()
             break
