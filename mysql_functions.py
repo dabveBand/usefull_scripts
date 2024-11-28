@@ -204,19 +204,29 @@ class MysqlFunc:
             f.write(footer)
             print('\n=> done writing to HTML file: {}\n'.format(out_file))
 
-    def load_csv(self, table_name, csv_file):
+    def load_csv(self, table_name, csv_file, headers=None):
         '''
         Load data from csv file to table_name
+        :table_name: The table name to insert data on
+        :csv_file: the csv file that contain records
+        :headers: a list of column name in MySQL table
+
         You must:
             - Add headers to your file.
             - Values separated with ';'
         '''
         conn, curs = self.login()
-        with open(csv_file, encoding='latin-1') as input_file:
-            csv_reader = csv.reader(input_file, delimiter=';')
-            headers = ', '.join(next(csv_reader))
+        with open(csv_file, encoding='utf-8') as input_file:
+            csv_reader = csv.reader(input_file, delimiter=',')
+
+            if not headers:
+                headers = ', '.join(next(csv_reader))
+            else:
+                headers = ', '.join(headers)
+
             rows = [tuple(row) for row in csv_reader]
             bind = ('%s, ' * len(rows[0]))[:-2]              # bind will contain '?, ?' * headers number - the last', '
+
         query = 'INSERT INTO ' + table_name + '(' + headers + ') VALUES(' + bind + ')'
         try:
             curs.executemany(query, rows)
@@ -253,10 +263,12 @@ if __name__ == '__main__':
     # ----------------
     user = 'dabve'
     host = 'localhost'
-    db_name = 'test_ngrok'
-    # db_name = ''
+    db_name = 'eljoumou3a'
     db_handler = MysqlFunc(user, host, db_name)
-    print(db_handler)
+
+    headers = ['id', 'harfText', 'hamimGroup', 'harfCountHamim', 'harfCountSuraName', 'harfQuranNumber', 'harfAbjad']
+    result = db_handler.load_csv('harf_harf', './quraan_search_arabicharf.csv', headers=headers)
+    print(result)
 
     # Query to create a database
     # query = 'create database if not exists stock_fact_idir character set "utf8"'
@@ -267,7 +279,7 @@ if __name__ == '__main__':
     # ------------------
     # => show databases
     # ------------------
-    db_handler.show_databases.richtable_display
+    # db_handler.show_databases.richtable_display
 
     # ---------------
     # => show tables

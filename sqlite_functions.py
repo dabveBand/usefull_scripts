@@ -6,7 +6,7 @@ import sys
 import pathlib
 import sqlite3
 from collections import namedtuple, OrderedDict
-# import utils
+import utils
 
 from rich.console import Console
 console = Console()
